@@ -1,0 +1,733 @@
+EDA of Red Wines quality by Oleksandr Brazhenko
+========================================================
+
+```{r packages}
+# Load all of the packages that you end up using
+# in your analysis in this code chunk.
+library(ggplot2)
+library(lsr)
+library(GGally)
+library(RColorBrewer)
+library(grid)
+library(gridExtra)
+library(ellipse)
+library(MASS)
+library(ellipse)
+library(lattice)
+library(memisc)
+library(reshape2)
+library(scales)
+```
+
+
+```{r user-defined functions}
+
+#function to create hist object 
+plot_hist_one_var <- function(x_str = "fixed.acidity", t, xl) {
+  ggplot( data = rw, aes_string(x = x_str)) +
+    geom_histogram(color="white", fill="#3366FF")+
+    ggtitle(t)+
+    xlab(xl)+
+    theme(plot.title = element_text(size=12))
+}
+
+#function to create box plot object
+box_plot_func <- function(x_str = "quality.rank", 
+                          y_str, xl = "Quality rank",yl,t){
+  ggplot( data = rw, aes_string(x=x_str, y = y_str)) +
+    geom_boxplot()+
+    xlab(xl)+
+    ylab(yl)+ 
+    ggtitle(t)
+}
+
+#function to create sactterplot object 
+point_plot_func <- function( col = "quality.rank",
+                            x_str, y_str, xl, yl, t, rvrs = T, 
+                            lt = "Quality rank" ){
+  ggplot( data = rw, aes_string(x=x_str, y = y_str, color=col)) +
+    geom_point(size=3, alpha=0.5, position="jitter")+
+    xlab(xl)+
+    ylab(yl)+    
+    ggtitle(t)+
+    scale_color_brewer(palette="Spectral",
+                       guide = guide_legend(title = lt, 
+                                            reverse = rvrs))
+}
+
+#function to create density plot object 
+density_plot_func <- function(d = rw,x_str,col,xl,t){
+  ggplot( data = d, aes_string(x = x_str, color=col ))+
+    geom_density(size = 1)+
+    xlab(xl)+    
+    ggtitle(t)  
+}
+
+```
+# Analysis
+
+Main purpose of this data set analysis is figure out which chemical chracteristics have influence on red wine quality.
+
+Explore the following parameters:
+
+* fixed acidity (tartaric acid - g / dm^3)
+* volatile acidity (acetic acid - g / dm^3)
+* citric acid (g / dm^3)
+* residual sugar (g / dm^3)
+* chlorides (sodium chloride - g / dm^3
+* free sulfur dioxide (mg / dm^3)
+* total sulfur dioxide (mg / dm^3)
+* density (g / cm^3)
+* pH
+* sulphates (potassium sulphate - g / dm3)
+* alcohol (% by volume)
+
+Output variable (based on sensory data): 
+* quality (score between 0 and 10)
+   
+   
+
+## Load the Data
+
+```{r Load_the_Data}
+rw <- read.csv('wineQualityReds.csv', sep=',')
+```
+### Summary of the Data Set
+```{r Summary}
+names(rw)
+summary(rw)
+```
+#### Observations from the Summary
+- Residual sugar maximum value is 15.5 g / dm^3. So, there are no sweet wines in this data set
+- Huge dispersion of Total SO2 from 6 to 289. 
+- alcohol varies from 8.4 to 14.9 %
+- pH range 2.74 - 4.0
+- quality minimum value is 3 and maximum is 8
+
+## Understanding the individual variables in the data set
+#### New categorical variable
+I'd like to classify a quality variable into a larger bin, such as (4-5]; (5-6]; (7-8]. 
+It makes analysis more deeper and specific. 
+Lets create new categorical variable called rw$quality.rank with values "Low", "Middle" and "High".
+
+```{r variable_transformation}
+rw$quality.rank <- cut(rw$quality, c(3,4,6,10), labels = c("low","middle","high"), include.lowest = T)
+
+summary(rw$quality.rank)
+
+#convert quality variable into categorical variable
+rw$quality <- factor(rw$quality)
+```
+
+####Quality distribution
+```{r analysis_1var_Quality}
+plot_hist_one_var(t = "Quality distribution for red wines",
+                                  x_str = "quality",
+                                  xl = "Quality")
+```
+
+
+##Understanding the distribution of single variables
+```{r analysis_1var_arrange 8 vars}
+plot_fix_acid = plot_hist_one_var(t = "Fixed acidity distribution",
+                                  x_str = "fixed.acidity",
+                                  xl = "Fixed acidity (g / dm^3)")+
+  coord_cartesian(xlim=c(quantile(rw$fixed.acidity, 0.01),
+                         quantile(rw$fixed.acidity, 0.99)))
+
+plot_vol_acid = plot_hist_one_var(x_str = "volatile.acidity",
+                          t = "Volatile acidity distribution",
+                          xl = "Volatile acidity (g / dm^3)") +
+                     coord_cartesian(xlim=c(0,1))
+
+plot_cit_acid = plot_hist_one_var(x_str = "citric.acid",
+                          t = "Citric acidity distribution",
+                          xl = "Citric acidity (g / dm^3)") +
+                     coord_cartesian(xlim=c(0,0.75))
+
+plot_res_sugar = plot_hist_one_var(x_str = "residual.sugar",
+                          t = "Residual sugar distribution",
+                          xl = "Residual sugar (g / dm^3)") +
+                     scale_x_continuous(breaks = seq(1,5,0.5))+  
+                     coord_cartesian(xlim=c(1,5))
+
+plot_chlorides = plot_hist_one_var(x_str = "chlorides",
+                          t = "Chlorides distribution",
+                          xl = "Chlorides (g / dm^3)") +
+                     coord_cartesian(xlim=c(0,0.2))
+
+plot_so2 = plot_hist_one_var(x_str = "total.sulfur.dioxide",
+                          t = "Total sulfur dioxide distribution",
+                          xl = "Total sulfur dioxide (mg / dm^3)") +
+                      coord_cartesian(xlim=c(0,150))
+
+plot_ph = plot_hist_one_var(x_str = "pH",
+                          t = "pH distribution",
+                          xl = "pH") +
+                      scale_x_continuous(breaks = seq(0,4,0.2))+
+                      coord_cartesian(xlim=c(2.8,3.8))
+
+plot_alcohol = plot_hist_one_var(x_str = "alcohol",
+                          t = "Alcohol distributionn",
+                          xl = "Alcohol (% by volume)")
+
+grid.arrange(plot_fix_acid,plot_vol_acid,plot_cit_acid,plot_res_sugar,ncol=2)
+grid.arrange(plot_chlorides,plot_so2,plot_ph,plot_alcohol,ncol=2)
+
+```
+
+####Observations from distributions
+- The most of variables have normal distribution 
+- The quality values seems to dispaly a normal distribution. Most observations have values equial to 5 or 6
+- Citric acid has uniform distribution with big count values in 0 
+- volatile acidity have an values between 0.4 and 0.6
+- most of wines consists residual sugar from 1.5 to 3.0 g/dm^3
+- total SO2 mostly lie under the 50 g/dm^3 level
+- pH also have strong normal distribution shape
+
+##Understanding of two variables relations
+
+###Correlation between variables 
+```{r analysis_2var_correlation}
+correlate(rw)
+```
+####Correlation plot
+```{r analysis_2var_correlation_plot}
+#craete new dataframe without categorical vars 
+numeric_vars <- names(rw) %in% c("quality.rank", "quality")
+rw_num <- rw[!numeric_vars]
+ctab <- cor(rw_num)
+#plot which show correlation in more convenient way
+colorfun <- colorRamp(c("#CC0000","white","#3366CC"), space="Lab")
+plotcorr(ctab, mar = c(0,0,0,0), col=rgb(colorfun((ctab+1)/2), 
+                                         maxColorValue=255))
+```
+
+####ggpairs function
+```{r analysis_2var_ggpairs_function, fig.width=10, fig.height=10}
+
+set.seed(278812)
+rw_samp <- rw[sample(1:length(rw$quality), 1000), ]
+ggpairs(rw_samp, axisLabels = "internal", 
+        params = c(shape = I('.'), outlier.shape = I('.')),
+        diag = list(prams = c(size = 1)))
+```
+
+#### Variables has the following correlations:
+- fixed.acidity:  positive correlation with citric.acid, density and negative correlation with pH
+- volatile.acidity: negative correlation with citric.acid
+- citric.acid: positive correlation with density and negative correlation with fixed.acidity, volatile.acidity, pH
+- chlorides: positive correlation with sulphates
+- pH: negative correlation with fixed.acidity, citric.acid, chlorides, density
+- alcohol: negative correlation with density
+- desity: positive correlation with fixed.acidity, citric.acid, residual.sugar and negative correlation with alcohol
+
+###Variables by quality ranking
+
+####Citric acid by quality rank
+```{r analysis_2var_citric_by_qual}
+box_plot_func(y_str = "citric.acid", 
+              yl = "Citric acid",
+              t = "Citric acid by quality rank")
+```
+
+Quality wines have higher level of Citric acid. At the same time max value not bigger than 1.0 and 3rd quartile equal to 0.42. Outliers almost absent.
+
+####SO2 by quality rank
+```{r analysis_2var_so2_by_qual}
+box_plot_func(y_str = "total.sulfur.dioxide", 
+              yl = "Total SO2",
+              t = "Total SO2 by quality rank")
+```
+
+No conclusions from Total SO2 distribution. Maybe, the reason is the values lie under the obvious limits in most of observations.
+
+####Residual sugar by quality rank
+```{r analysis_2var_rs1_by_qual}
+box_plot_func(y_str = "residual.sugar", 
+              yl = "Residual sugar",
+              t = "Residual sugar by quality rank")
+```
+
+Set limits and zoom the plot
+
+```{r analysis_2var_rs2_by_qual}
+box_plot_func(y_str = "residual.sugar", 
+              yl = "Residual sugar",
+              t = "Residual sugar by quality rank")+
+  coord_cartesian(ylim=c(1.5,3))
+
+by(rw$residual.sugar, rw$quality.rank,  summary)
+```
+
+Residual sugar median have bigger values for quality wines.
+At the same time it has a huge dispersion, especially for poor wines. In this case 1st Qu. = 1.9 which lower than the "middle" and "high" rank of wines has. The 3rd Qu. = 2.95 which bigger than the other wines. 
+Sugar max value is 15.5 so, there's no sweet wines in this dataset (as we know, to be sweet wine should consist more than 45 g/m^3 sugar)
+
+####pH by quality rank
+```{r analysis_2var_ph_by_qual}
+box_plot_func(y_str = "pH", 
+              yl = "pH",
+              t = "pH by quality rank")+
+  coord_cartesian(ylim=c(3.1,3.6))
+
+by(rw$pH, rw$quality.rank,  summary)
+```
+
+pH has higher values for poor wines.
+
+####Alcohol by quality rank
+```{r analysis_2var_alcohol_by_qual}
+box_plot_func(y_str = "alcohol", 
+              yl = "Alcohol",
+              t = "Alcohol by quality rank")+
+    coord_cartesian(ylim=c(9,13))
+
+by(rw$alcohol, rw$quality.rank,  summary)
+```
+
+Significant difference of alcohol value between "high" quality wines and the others. At the same time, wine with "low" and "middle" quality rank have distribution and median pretty similar.
+
+####Sulphates by quality rank
+```{r analysis_2var_sulph_by_qual1}
+box_plot_func(y_str = "sulphates", 
+              yl = "Sulphates",
+              t = "Sulphates by quality rank")
+```
+
+Set limits and zoom the plot
+
+```{r analysis_2var_sulph_by_qual2}
+box_plot_func(y_str = "sulphates", 
+              yl = "Sulphates",
+              t = "Sulphates by quality rank")+
+  coord_cartesian(ylim=c(0.4,0.9))
+
+by(rw$sulphates, rw$quality.rank,  summary)
+```
+
+There are unexpected result a little bit. Quality rank depends on sulphates value. I'd assumed sulphates makes wine worst, but in this case it isn't confirmed. 
+Examine this value later.
+
+####Chlorides by quality rank
+```{r analysis_2var_chlorides_by_qual}
+box_plot_func(y_str = "chlorides", 
+              yl = "Chlorides",
+              t = "Chlorides by quality rank")+ 
+  coord_cartesian(ylim=c(0.05,0.1))
+```
+
+Chlorides have many outliers. 
+
+####Observations from two variables exploration
+Seems that wines quality depend on the following characteristics:
+
+* alcohol;
+* sulphates; 
+* Volatile acidity;
+* Citric acid
+
+Let's examine these variables deeper.
+
+##Explore many variables
+
+###Examine pH more closely
+
+####Chlorides vs pH by Quality rank
+```{r analysis_3var_chlorides_vs_ph_byqrank}
+point_plot_func( x_str = "pH", 
+                 y_str = "chlorides", 
+                 xl = "pH", 
+                 yl = "Chorides", 
+                 t = "Chlorides vs pH by Quality rank", 
+                 rvrs = F)+
+  coord_cartesian(ylim=c(0,0.2))
+```
+
+No conclusions from this plot
+
+####Sulphates vs pH by Quality rank
+```{r analysis_3var_sulph_vs_ph_qrank}
+point_plot_func( x_str = "pH", 
+                 y_str = "sulphates", 
+                 xl = "pH", 
+                 yl = "Sulphates", 
+                 t = "Sulphates vs pH by Quality rank")
+
+```
+
+It looks like wines with higher sulphates value will be more quality with the equal level of pH. One more evidence of sulphates influence on quality. 
+
+####Citric acid vs pH by Quality rank
+```{r analysis_3var_casid_vs_cacid_qrank}
+point_plot_func( x_str = "pH", 
+                 y_str = "citric.acid", 
+                 xl = "pH", 
+                 yl = "Citric acid", 
+                 t = "Citric acid vs pH by Quality rank")
+```
+
+Most of HQ wines lie above 0.25 of Citric acid value
+
+####Volatile acidity vs pH by Quality rank
+```{r analysis_3var_volatile_acidity_vs_ph_qrank}
+point_plot_func( x_str = "pH", 
+                 y_str = "volatile.acidity", 
+                 xl = "pH", 
+                 yl = "Volatile acidity", 
+                 t = "Volatile acidity vs pH by Quality rank",
+                 rvrs = F)
+```
+
+Looks like wines with lower volatile acidity value will be of higher quality with the equal level of pH. 
+
+###Examine sulphates more closely
+
+####Sulphates vs SO2 by Quality rank
+```{r analysis_3var_sulphates_vs_tso2_qrank}
+point_plot_func( x_str = "total.sulfur.dioxide", 
+                 y_str = "sulphates", 
+                 xl = "Total SO2", 
+                 yl = "Sulphates", 
+                 t = "Sulphates vs Total SO2 by Quality rank")+
+    coord_cartesian(ylim=c(0,1.5), xlim=c(0,100))
+```
+
+Another confirmation of sulphates influence. Seems like quality wines mostly consists no more than 50g of total SO2.
+
+####Sulphates vs volatile acidity by Quality rank
+```{r analysis_3var_volatile_vs_sulphates_qrank}
+point_plot_func( x_str = "volatile.acidity", 
+                 y_str = "sulphates", 
+                 xl = "Volatile acidity", 
+                 yl = "Sulphates", 
+                 t = "Sulphates vs Volatile acidity by Quality rank")
+```
+
+Quality wines lies under the 0.4 volatile acidity. At the same time high quality wines has a big dispersion of sulphates than the other wines. 
+
+####Sulphates vs alcohol by Quality rank
+```{r analysis_3var_sulphates_vs_alcohol_qrank}
+point_plot_func( x_str = "alcohol", 
+                 y_str = "sulphates", 
+                 xl = "Alcohol", 
+                 yl = "Sulphates", 
+                 t = "Sulphates vs Alcohol by Quality rank")
+```
+
+Another interesting plot. All quality wines placed in top right corner with higher level of sulfates and alcohol.
+
+###Examine alcohol more closely
+
+####Density vs alcohol by Quality rank
+```{r analysis_3var_density_vs_sulphates_qrank}
+point_plot_func( x_str = "alcohol", 
+                 y_str = "density", 
+                 xl = "Alcohol", 
+                 yl = "density", 
+                 t = "Density vs alcohol by Quality rank")
+
+```
+
+Looks like density reduced in dependence on alcohol level growth
+
+####Density vs residual sugar by Quality rank
+```{r analysis_3var_rs_vs_density_qrank}
+point_plot_func( x_str = "residual.sugar", 
+                 y_str = "density", 
+                 xl = "Residual sugar", 
+                 yl = "Density", 
+                 t = "Density vs Residual sugar Quality rank")+
+  coord_cartesian(xlim=c(1,4))
+```
+
+No conclusions from this plot
+
+####Residual sugar vs Alcohol by Density
+```{r analysis_3var_rs_vs_alcohos_density}
+ggplot( data = rw, aes(x=alcohol, y = residual.sugar, color=density)) +
+  geom_point(size=3, alpha=0.5, position="jitter")+
+  xlab("Alcohol")+
+  ylab("Residual sugar")+
+  ggtitle("Residual sugar vs Alcohol by Density")+
+  coord_cartesian(ylim=c(1,4))
+  
+```
+
+No conclusions from this plot
+
+####Residual sugar vs Alcohol by Quality rank
+```{r analysis_3var_rs_vs_alcohol_qrank2}
+point_plot_func( x_str = "alcohol", 
+                 y_str = "residual.sugar", 
+                 yl = "Residual sugar", 
+                 xl = "Alcohol", 
+                 t = "Residual sugar vs Alcohol by Quality rank")+
+  coord_cartesian(ylim=c(1,4))
+```
+
+No conclusions from this plot
+
+####Citric acid vs alcohol by Quality rank
+```{r analysis_3var_cacid_vs_alcohol_qrank}
+point_plot_func( x_str = "alcohol", 
+                 y_str = "citric.acid", 
+                 yl = "Citric acid", 
+                 xl = "Alcohol", 
+                 t = "Citric acid vs Alcohol by Quality rank")+
+  coord_cartesian(ylim=c(0.05,0.15))
+```
+
+No conclusions from this plot
+
+####Volatile acidity vs alcohol by Quality rank
+```{r analysis_3var_va_vs_alcohol_qrank}
+point_plot_func( x_str = "alcohol", 
+                 y_str = "volatile.acidity", 
+                 yl = "Volatile acidity", 
+                 xl = "Alcohol", 
+                 t = "Volatile acidity vs alcohol by Quality rank")
+
+```
+
+There are confirmed thesis wines more quality with lower volatile acidity level.
+
+## Additional analysis of high quality wines 
+
+```{r high_quality_red_wines_subset}
+#craete subset with only HQ rank wines
+hqrw = subset(rw, quality.rank == "high")
+
+ggplot()+
+  geom_point(data = hqrw, aes(x=volatile.acidity, 
+                              y = citric.acid),
+             color = "#3366FF", 
+             size=3)+
+  ylab("Citric acid")+
+  xlab("Volatle acidity")+    
+  ggtitle("Citric acid vs Volatile acidity for high quality rank wines")+
+  scale_x_continuous(breaks = seq(0,1.6,0.2))+  
+  scale_y_continuous(breaks = seq(0,0.75,0.25))+  
+  geom_rect(aes(xmin=0.4,xmax=Inf,ymin=0,ymax=0.25),alpha=0.2,fill="red")
+
+```
+
+This plot show mostly of HQ wines placed in zone with high level of citric acid (>0.25) and low level of volatile acidity (<0.4). However, there are some HQ wines which break this rule. 
+They placed in red square on the plot.
+
+I'd like to compare these two data sets and try to figure out which parameters are distinguished and which characteristics contribute to save high quality of wine even in case of high volatile acidity and low citric acid.
+Create new categorical variable in new data set. It'll be defined whether wine lie in "red zone" or not. Let's call it hqrw$is.outliers
+
+```{r new_categorical_var}
+hqrw$is.outliers <- ifelse(hqrw$citric.acid<0.25 & hqrw$volatile.acidity>0.4,
+                        "y", "n")
+```
+
+Let's look at our variables
+
+```{r analysis_3var_ph_density_outliers}
+density_plot_func(d = hqrw,
+                  col = "is.outliers",
+                  x_str = "pH",
+                  xl = "pH",
+                  t = "Density of pH for high quality rank wines")
+
+by(hqrw$pH, hqrw$is.outliers,  summary)
+```
+
+pH level significantly differ between these two groups. 1st Qu. of "red zones" values equal to 3.37. It's higher than the 3rd Qu. (3.32) of the other part of data set.
+Before I noticed worse wines has higher pH value. In this case HQ wines have higher level of pH. So, it's very interesting finding.
+
+Let's look on the other variables.
+
+```{r analysis_3var_arrange_outliers}
+HQ_sulph_density = density_plot_func(d = hqrw,
+                  col = "is.outliers",
+                  x_str = "sulphates",
+                  xl = "Sulphates",
+                  t = "Sulphates density by HQ wine group")+
+            theme(plot.title = element_text(size=10))  
+  
+HQ_totalso_density = density_plot_func(d = hqrw,
+                  col = "is.outliers",
+                  x_str = "total.sulfur.dioxide",
+                  xl = "Total SO2",
+                  t = "Total SO2 density by HQ wine group")+
+            theme(plot.title = element_text(size=10))  
+
+HQ_freeso_density = density_plot_func(d = hqrw,
+                  col = "is.outliers",
+                  x_str = "free.sulfur.dioxide",
+                  xl = "Free SO2",
+                  t = "Free SO2 density by HQ wine group")+
+            theme(plot.title = element_text(size=10))  
+
+HQ_chlorides_density = density_plot_func(d = hqrw,
+                  col = "is.outliers",
+                  x_str = "chlorides",
+                  xl = "Chlorides",
+                  t = "Chlorides density by HQ wine group")+
+            theme(plot.title = element_text(size=10))  
+
+grid.arrange(HQ_chlorides_density,
+             HQ_freeso_density,
+             HQ_totalso_density,
+             HQ_sulph_density,
+             ncol=2)
+
+by(hqrw$total.sulfur.dioxide, hqrw$is.outliers,  summary)
+by(hqrw$free.sulfur.dioxide, hqrw$is.outliers,  summary)
+by(hqrw$chlorides, hqrw$is.outliers,  summary)
+```
+
+
+# Final Plots and Summary
+### Plot One
+```{r final_Plot_One, fig.width=10, fig.height=5}
+final_plot_one_1 = density_plot_func(col = "quality.rank",
+                  x_str = "alcohol",
+                  xl = "Alcohol",
+                  t = "Alcohol density\n by quality rank")+
+  theme(legend.justification=c(1,1), 
+        legend.position=c(1,1))  
+
+final_plot_one_2 = point_plot_func( x_str = "alcohol", 
+                 y_str = "volatile.acidity", 
+                 yl = "Volatile acidity", 
+                 xl = "Alcohol", 
+                 t = "Volatile acidity vs alcohol\n by quality rank",
+                 rvrs = F)+
+  theme(legend.justification=c(1,1), 
+        legend.position=c(1,1)) 
+
+grid.arrange(final_plot_one_1, final_plot_one_2, ncol=2)
+```
+
+HQ wines contain more alcohol than the other.  However, we shouldn't forget about acidity. 
+In case of wines with alcohol more than 10% HQ wines placed in zone with low volatile acidity.
+
+### Plot Two
+```{r final_Plot_Two, fig.width=10, fig.height=5}
+final_plot_two_1 = ggplot( data = rw, 
+                           aes(x=quality.rank, 
+                               y = sulphates, 
+                               fill = quality.rank)) +
+  geom_boxplot()+
+  xlab("Quality rank")+
+  ylab("Sulphates (g / dm^3)")+
+  ggtitle("Sulphates by quality rank")+
+  coord_cartesian(ylim=c(0.4,0.9))+
+  theme(legend.justification=c(1,0), 
+        legend.position=c(1,0))
+
+final_plot_two_2 = point_plot_func( x_str = "pH", 
+                 y_str = "sulphates", 
+                 yl = "Sulphates", 
+                 xl = "pH", 
+                 t = "Sulphates vs pH by quality rank")+
+  coord_cartesian(ylim=c(0.2,1.2))+ 
+  theme(legend.justification=c(1,0), 
+        legend.position=c(1,0))
+
+grid.arrange(final_plot_two_1, final_plot_two_2, ncol=2)
+```
+
+Quality rank depends on sulphates value and this is unexpected result a little bit . 
+If we look at sulphates vs pH level, we will find HQ wines contain more sulphates at the same level of pH.
+
+### Plot Three
+```{r final_Plot_Three, fig.width=10, fig.height=5}
+final_plot_tree_1 = ggplot()+
+  geom_point(alpha = 0.5, 
+             data = rw, 
+             aes(x=volatile.acidity,
+                 y = citric.acid, 
+                 color = quality.rank), 
+             size=2)+
+  scale_x_continuous(breaks = seq(0,1.6,0.2))+    
+  ylab("Citric acid")+
+  xlab("Volatle acidity")+    
+  ggtitle("Citric acid vs Volatile acidity by quality rank")+
+  scale_color_brewer(palette="Spectral",
+                     type = 'div',
+                     guide = guide_legend(title = 'Quality rank',
+                                          reverse = T))+  
+  geom_rect(aes(xmin=0.4,xmax=Inf,ymin=0,ymax=0.25),alpha=0.1,fill="red") +
+  theme(plot.title = element_text(size=12),
+        legend.justification=c(1,1), 
+        legend.position=c(1,1))
+
+
+final_plot_tree_2 = density_plot_func(d = hqrw,
+                  col = "is.outliers",
+                  x_str = "pH",
+                  xl = "pH",
+                  t = "Density of pH for HQ rank wines")+
+  theme(plot.title = element_text(size=12), 
+        legend.justification=c(1,1), 
+        legend.position=c(1,1))
+
+grid.arrange(final_plot_tree_1, final_plot_tree_2, ncol=2)
+```
+
+HQ wines mainly have low level of volatile acidity and citric acid level between 0.25 and 0.75.
+However, some samples of HQ wines has different parameters. 
+
+Additional research of HQ wines subset and its outliers show interesting dependencies. 
+If wines have high level of quality even in "red zone", then pH value significantly increase. 
+To reduce influence of volatile acidity on quality need to increase quantity of antioxidants.
+As a result we receive higher value of pH for HQ wines with high level of acidity.
+Antioxidants may be such data set parameters as Chlorides, Total and Free SO2 and Sulphates.
+
+### Summary
+Three final plots demonstrate dependance wines quality from the several characteristics. As a result, the same quality wine level may have different proportions of SO2, sulphates, pH, acidity and alcohol. 
+
+Main findings and trends of red wine data set:
+
+* high quality wines have higher level of alcohol;
+* at the same time Volatile acidity level shouldn't be higher than 0.4. In the case of high volatile acidity level need to raise pH value;
+* most of HQ wines consist from 0.25 to 0.75 citric acid;
+* sulphates level make wines more quality. However, they should lie under the 1.0 value;
+* HQ wines don't consist Total SO2 more than 50 g/dm^3.
+
+Another interesting thing is poor wines has a high pH level, but in the third plot we saw opposite evidence. I think pH level makes balance to provide good taste for wine. 
+
+For example, we have pretty similar values of pH for the different wine quality.
+in main data set for poor wines: 
+Min.    1st Qu.  Median    Mean   3rd Qu.  Max. 
+2.740   3.300    3.380    3.384   3.500    3.900
+
+in HQ wines subset for "outliers":
+Min.    1st Qu.  Median    Mean   3rd Qu.  Max. 
+3.320   3.370    3.460     3.476  3.560    3.720
+
+So, we can't examine wine quality based only on the single parameter.
+
+# Reflection
+It was interesting to explore this data set. I'm not expert of wines. I even don't drink. So, it was fascinatingly to determine which characteristics make wines good or poor without tasting :) 
+
+When I used different plot types I received more complex information about the same variable. (e.g. boxplot show different details rather than histogram or density plot). 
+I never used boxplots before. So, it's very useful tool to describe variable.
+
+Exploring subset of HQ wines and outliers in the end of data analysis discovered some interesting dependencies. After that, I realized how parameters contribute to each other.
+
+During analysis I faced  such difficulties as:
+
+* some R functions. I used manual, blogs etc. For example, to set parameters of ggpairs function;
+* I don't fully understood pH role in data set.
+
+Moreover, there are several tricky moment in the data set:
+
+* presence of input data errors (says in data description); 
+* a few observations of poor and high quality wines;
+* all wines produced in the same region of Portugal. Thus, wines from France or the US may have other character    istic values. 
+
+In this data set I didn't find such features like age of wine, grape, soil acidity etc. Feasibly, one of them could show interesting correlations.
+
+Possible future researches:
+
+* go deeper in data set and explore such features as residual sugar, fixed acidity;
+* continue to explore outliers and examine poor quality wines;
+* apply different methods of regression analysis.
+
+EDA really exciting and may take a huge time to research. You should to know time to stop.
